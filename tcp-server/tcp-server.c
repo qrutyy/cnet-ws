@@ -42,7 +42,7 @@ struct cmd_args *parse_cmd_args(int argc, char* argv[]) {
 }
 
 int main(int argc, char* argv[]) {
-	int sockfd;
+	int sockfd, ready;
 	int n = 0;
 	char buffer[4096];
 	char request[512];
@@ -53,16 +53,18 @@ int main(int argc, char* argv[]) {
 	 */
 	struct hostent *server;
 	struct cmd_args *args;
+	fd_set readfds;
 	struct timeval timeout;      
 
 	timeout.tv_sec = 4;
 	timeout.tv_usec = 0;
 
 	args = parse_cmd_args(argc, argv);
-	if (!args) { 
-		if (strcmp(args->hostname, "") || args->port == 0) 
-			fprintf(stderr, "-p, -n args are necessary\n");
+	if (!args)
 		return -2;
+	if (!args->hostname || !strcmp(args->hostname, "") || args->port == 0) {
+		fprintf(stderr, "-p, -n args are necessary\n");
+		return -3;
 	}
 
 	/* A SOCK_STREAM type provides sequenced, reliable, two-way connection based byte streams.
@@ -73,6 +75,8 @@ int main(int argc, char* argv[]) {
 		fprintf(stderr, "Failed to create a socket\n");
 		return -1;
 	}
+
+	fprintf(stdout, "Socket desc %d\n", sockfd);
 
 	server = gethostbyname(args->hostname); /* resolve the ip-addr by the dns */
 	if (!server) {
@@ -105,11 +109,46 @@ int main(int argc, char* argv[]) {
 		return -1;
 	}
 
-	while ((n = recv(sockfd, buffer, sizeof(buffer) - 1, 0)) > 0) {
-		buffer[n] = '\0';
-		printf("%s", buffer);
+	if (sockfd < 1024) {
+		while (1) {
+			FD_ZERO(&readfds);        
+			FD_SET(sockfd, &readfds);
+
+			timeout.tv_sec = 5;
+			timeout.tv_usec = 0;
+
+			ready = select(sockfd + 1, &readfds, NULL, NULL, &timeout);
+			if (ready < 0) {
+				fprintf(stderr, "select\n");
+				break;
+			} else if (ready == 0) {
+				fprintf(stdout, "Timeout: no data\n");
+				break;
+			}
+
+			if (FD_ISSET(sockfd, &readfds)) {
+				n = recv(sockfd, buffer, sizeof(buffer) - 1, 0);
+				if (n < 0) {
+					fprintf(stderr, "recv\n");
+					break;
+				} else if (n == 0) {
+					fprintf(stdout, "Connection is closed\n");
+					break;
+				}
+
+				buffer[n] = '\0';
+				printf("%s", buffer);
+			}
+		}
+	} else {
+		fprintf(stderr, "Select doesnt't work with fd > 1024 (check man)\n");
+		while ((n = recv(sockfd, buffer, sizeof(buffer) - 1, 0)) > 0) {
+			buffer[n] = '\0';
+			printf("%s", buffer);
+		}
 	}
-	
+
 	close(sockfd);
 	return 0;
 }
+
