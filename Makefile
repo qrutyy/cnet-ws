@@ -3,7 +3,7 @@ SHELL := /bin/sh
 CC := gcc
 CFLAGS := -Wall -Wpedantic -Wextra -O3 -DNDEBUG -std=c99
 
-SUBDIRS := tcp-server
+SUBDIRS := tcp-client udp-client
 
 BINDIR := bin
 

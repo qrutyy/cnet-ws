@@ -12,7 +12,7 @@ struct cmd_args {
 	char *hostname;
 };
 
-struct cmd_args *parse_cmd_args(int argc, char* argv[]) {
+static struct cmd_args *parse_cmd_args(int argc, char* argv[]) {
 	int opt;
 
 	struct cmd_args *args = malloc(sizeof(struct cmd_args));
