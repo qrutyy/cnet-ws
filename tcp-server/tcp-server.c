@@ -7,54 +7,95 @@
 #include <arpa/inet.h> // for inet_pton()
 #include <netdb.h> // for gethostbyname()
 
+struct cmd_args {
+	int port;
+	char *hostname;
+};
 
-#define PORT 80
+struct cmd_args *parse_cmd_args(int argc, char* argv[]) {
+	int opt;
 
-const char *hostname = "miminet.ru";
+	struct cmd_args *args = malloc(sizeof(struct cmd_args));
+	if (!args) {
+		fprintf(stderr, "Failed to allocate mem\n");
+		return NULL;
+	}
+	memset(args, 0, sizeof(struct cmd_args));
+
+	while ((opt = getopt(argc, argv, "n:p:")) != -1) {
+		switch (opt) {
+			case 'n':
+				printf("Hostname %s\n", optarg);
+				args->hostname = optarg;
+				break;
+			case 'p':
+				printf("Port %d\n", atoi(optarg));
+				args->port = atoi(optarg);
+				break;
+			default:
+				fprintf(stderr, "Unknown option\n");
+				return NULL;
+		}
+	}
+
+	return args;
+}
 
 int main(int argc, char* argv[]) {
 	int sockfd;
-	int opt = 1;
-	struct sockaddr_in addr; // describes an ipv4 internet domain socket addr. the sin_port and sin_addr are stored in network byte order, thats why we need to conver by using htons.
+	int n;
+	char buffer[4096];
+	struct sockaddr_in addr; 
+	/* describes an ipv4 internet domain socket addr. 
+	 * the sin_port and sin_addr are stored in network byte order, 
+	 * thats why we need to conver by using htons.
+	 */
 	struct hostent *server;
+	struct cmd_args *args;
 
-	// A SOCK_STREAM type provides sequenced, reliable, two-way connection based byte streams.
-	// domain specifies the protocol family that will be used for communication
-	// AF_INET - ipv4
+
+	args = parse_cmd_args(argc, argv);
+	if (!args) { 
+		if (strcmp(args->hostname, "") || args->port == 0) 
+			fprintf(stderr, "-p, -n args are necessary\n");
+		return -2;
+	}
+
+	/* A SOCK_STREAM type provides sequenced, reliable, two-way connection based byte streams.
+	 * domain specifies the protocol family that will be used for communication
+	 * AF_INET - ipv4
+	 */
 	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) < 0) {
-		fprintf(stderr, "failed to create a socket\n");
+		fprintf(stderr, "Failed to create a socket\n");
 		return -1;
 	}
 
-	server = gethostbyname(hostname); // resolbe the ip-addr by the dns
+	server = gethostbyname(args->hostname); /* resolve the ip-addr by the dns */
 	if (!server) {
-		fprintf(stderr, "failed to hesolve the host by name %s\n", hostname);
+		fprintf(stderr, "Failed to hesolve the host by name %s\n", args->hostname);
 		return -1;
 	}
 
 	memset(&addr, 0, sizeof(addr));
 	addr.sin_family = AF_INET;
-	addr.sin_port = htons(PORT); // convert port to network format
+	addr.sin_port = htons(args->port); /* convert port to network format */
 	memcpy(&addr.sin_addr.s_addr, server->h_addr, server->h_length);
 
 	if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-		perror("Error connecting");
+		fprintf(stderr, "Error connecting\n");
 		exit(1);
 	}
 
 	const char *request = "GET / HTTP/1.0\r\nHost: miminet.ru\r\n\r\n";
 	if (send(sockfd, request, strlen(request), 0) < 0) {
-		perror("Error writing to socket");
+		fprintf(stderr, "Error sending the request\n");
 		exit(1);
 	}
 
-	char buffer[4096];
-	int n;
 	while ((n = recv(sockfd, buffer, sizeof(buffer) - 1, 0)) > 0) {
 		buffer[n] = '\0';
 		printf("%s", buffer);
 	}
-	
 
 	close(sockfd);
 	return 0;
