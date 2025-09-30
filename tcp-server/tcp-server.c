@@ -43,8 +43,9 @@ struct cmd_args *parse_cmd_args(int argc, char* argv[]) {
 
 int main(int argc, char* argv[]) {
 	int sockfd;
-	int n;
+	int n = 0;
 	char buffer[4096];
+	char request[512];
 	struct sockaddr_in addr; 
 	/* describes an ipv4 internet domain socket addr. 
 	 * the sin_port and sin_addr are stored in network byte order, 
@@ -52,7 +53,10 @@ int main(int argc, char* argv[]) {
 	 */
 	struct hostent *server;
 	struct cmd_args *args;
+	struct timeval timeout;      
 
+	timeout.tv_sec = 4;
+	timeout.tv_usec = 0;
 
 	args = parse_cmd_args(argc, argv);
 	if (!args) { 
@@ -81,22 +85,31 @@ int main(int argc, char* argv[]) {
 	addr.sin_port = htons(args->port); /* convert port to network format */
 	memcpy(&addr.sin_addr.s_addr, server->h_addr, server->h_length);
 
-	if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
-		fprintf(stderr, "Error connecting\n");
-		exit(1);
+	/* SOL_SOCKET - to manipulate options on the socket lvl, 
+	 * SO_RCVTIMEO - timeout for input 
+	 */ 
+	if (setsockopt(sockfd, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout)) < 0) {
+		fprintf(stderr, "Failed setting options (timeout) connecting\n");
+		return -1;
 	}
 
-	const char *request = "GET / HTTP/1.0\r\nHost: miminet.ru\r\n\r\n";
+	if (connect(sockfd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+		fprintf(stderr, "Error connecting\n");
+		return -1;
+	}
+
+    
+	snprintf(request, sizeof(request), "GET / HTTP/1.0\r\nHost: %s\r\n\r\n", args->hostname);
 	if (send(sockfd, request, strlen(request), 0) < 0) {
 		fprintf(stderr, "Error sending the request\n");
-		exit(1);
+		return -1;
 	}
 
 	while ((n = recv(sockfd, buffer, sizeof(buffer) - 1, 0)) > 0) {
 		buffer[n] = '\0';
 		printf("%s", buffer);
 	}
-
+	
 	close(sockfd);
 	return 0;
 }
