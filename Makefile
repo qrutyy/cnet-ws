@@ -1,21 +1,22 @@
-SHELL = /bin/sh
+SHELL := /bin/sh
 
-CC = gcc
-CFLAGS = -Wall -Wpedantic -Wextra -O3 -DNDEBUG -std=c99
+CC := gcc
+CFLAGS := -Wall -Wpedantic -Wextra -O3 -DNDEBUG -std=c99
 
-SUBDIRS := tcp-server 
+SUBDIRS := tcp-server
 
-TARGETS := $(SUBDIRS)
+BINDIR := bin
 
-all:
-	$(TARGETS)
+TARGETS := $(addprefix $(BINDIR)/,$(SUBDIRS))
 
-$(TARGETS):
-	$(CC) $(CCFLAGS) $(CFLAGS) $(wildcard $@/*.c) -o $@.out
+all: $(TARGETS)
 
+$(BINDIR)/%: %
+	@mkdir -p $(BINDIR)
+	$(CC) $(CFLAGS) $(wildcard $</*.c) -o $@
 
 clean:
-	rm -f $(addsuffix .out,$(SUBDIRS))
+	rm -rf $(BINDIR)
 
+.PHONY: all clean $(SUBDIRS)
 
-.PHONY: all clean $(TARGETS)
